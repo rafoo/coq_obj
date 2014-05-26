@@ -4,7 +4,11 @@ Require Import String.
 
 Inductive type :=
 | Empty_type
-| Cons_type : (string * type) -> type -> type.
+| Cons_type : string -> type -> type -> type.
+
+(* Alternative constructor used for notation purpose *)
+Definition Cons_type_2 : (string * type) -> type -> type :=
+  fun f B => let (l, A) := f in Cons_type l A B.
 
 (* Scope of object types *)
 Bind Scope obj_type_scope with type.
@@ -16,10 +20,8 @@ Delimit Scope type_field_scope with tf.
    [ "l₁" : A₁ ; "l₂" : A₂ ; … ; "lₙ" : Aₙ ]
  *)
 Notation "l : A" := (l%string, A) (at level 50) : type_field_scope.
-Notation "[]" := Empty_type : obj_type_scope.
-Notation "f :: A" := (Cons_type f%tf A) : obj_type_scope.
 Notation "[ x1 ; .. ; xn ]" :=
-  (Cons_type x1%tf .. (Cons_type xn%tf Empty_type) ..) : obj_type_scope.
+  (Cons_type_2 x1%tf .. (Cons_type_2 xn%tf Empty_type) ..) : obj_type_scope.
 
 
 (* Objects are records of methods.
@@ -39,8 +41,8 @@ Notation "[ x1 ; .. ; xn ]" :=
 Fixpoint assoc (A : type) : string -> type :=
   fun l =>
   match A with
-    | []%ty => []%ty
-    | ((l2 : B) :: C)%ty =>
+    | Empty_type => Empty_type
+    | Cons_type l2 B C =>
       match string_dec l l2 with
         | left _ => B
         | right _ => assoc C l
@@ -49,8 +51,8 @@ Fixpoint assoc (A : type) : string -> type :=
 
 Fixpoint domain A :=
   match A with
-    | []%ty => nil
-    | ((l : _) :: C)%ty => cons l (domain C)
+    | Empty_type => nil
+    | Cons_type l _ C => cons l (domain C)
   end.
 
 (* We have to axiomatize the type of methods because
