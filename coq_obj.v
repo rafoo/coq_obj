@@ -1,5 +1,101 @@
 Require Import String.
 
+Section string_dec.
+
+  (* The goal of this section is to prove the following theorem:
+     string_dec_refl l : string_dec l l = left (eq_refl l)
+   *)
+
+  Theorem bool_dec_refl b : Bool.bool_dec b b = left (eq_refl b).
+    induction b ; reflexivity.
+  Qed.
+
+  Theorem ascii_dec_refl a : Ascii.ascii_dec a a = left (eq_refl a).
+    induction a.
+    unfold Ascii.ascii_dec.
+    unfold Ascii.ascii_rec.
+    unfold Ascii.ascii_rect.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    rewrite bool_dec_refl.
+    reflexivity.
+  Qed.
+
+  Lemma string_dec_cons_eq1 a l :
+    string_dec (String a l) (String a l) =
+    match Ascii.ascii_dec a a with
+      | left a0 =>
+        eq_rec_r
+          (fun a' => {String a' l = String a l} + {String a' l <> String a l})
+          match string_dec l l with
+            | left a3 =>
+              eq_rec_r
+                (fun s => {String a s = String a l} + {String a s <> String a l})
+                (left eq_refl) a3
+            | right diseq =>
+              right
+                (fun absurd : String a l = String a l =>
+                   diseq
+                     (f_equal
+                        (fun e =>
+                           match e with
+                             | ""%string => l
+                             | String _ s => s
+                           end) absurd))
+          end a0
+      | right diseq =>
+        right
+          (fun absurd : String a l = String a l =>
+             diseq
+               (f_equal
+                  (fun e =>
+                     match e with
+                       | ""%string => a
+                       | String a _ => a
+                     end) absurd))
+    end.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma string_dec_cons_eq2 a l :
+    string_dec (String a l) (String a l) =
+    match string_dec l l with
+      | left a3 =>
+        eq_rec_r
+          (fun s => {String a s = String a l} + {String a s <> String a l})
+          (left eq_refl) a3
+      | right diseq =>
+        right
+          (fun absurd : String a l = String a l =>
+             diseq
+               (f_equal
+                  (fun e =>
+                     match e with
+                       | ""%string => l
+                       | String _ s => s
+                     end) absurd))
+    end.
+  Proof.
+    rewrite string_dec_cons_eq1.
+    rewrite ascii_dec_refl.
+    reflexivity.
+  Qed.
+
+  Theorem string_dec_refl l : string_dec l l = left (eq_refl l).
+    induction l.
+    - reflexivity.
+    - rewrite string_dec_cons_eq2.
+      rewrite IHl.
+      reflexivity.
+  Qed.
+End string_dec.
+
 (* Object types are records of types, we define them as association lists *)
 
 Inductive type :=
@@ -40,14 +136,14 @@ Notation "[ x1 ; .. ; xn ]" :=
 
 Fixpoint assoc (A : type) : string -> type :=
   fun l =>
-  match A with
-    | Empty_type => Empty_type
-    | Cons_type l2 B C =>
-      match string_dec l l2 with
-        | left _ => B
-        | right _ => assoc C l
-      end
-  end.
+    match A with
+      | Empty_type => Empty_type
+      | Cons_type l2 B C =>
+        match string_dec l l2 with
+          | left _ => B
+          | right _ => assoc C l
+        end
+    end.
 
 Fixpoint domain A :=
   match A with
@@ -99,7 +195,7 @@ Parameter loop : forall A, Obj A.
 
 (* Selection and update go inside objects so they have to be defined on preobjects first. *)
 
-Fixpoint preselect A f d l (po : Preobject A f d) : Obj A -> Obj (f l) :=
+Fixpoint preselect l A f d (po : Preobject A f d) : Obj A -> Obj (f l) :=
   match po with
     | poempty _ _ => (fun _ => loop _)
     | pocons A f d l2 m tail =>
@@ -111,133 +207,68 @@ Fixpoint preselect A f d l (po : Preobject A f d) : Obj A -> Obj (f l) :=
       end
   end.
 
-Fixpoint select A l a : Obj (assoc A l) := 
-  preselect A (assoc A) (domain A) l a a.
-Notation "a # l" := (select _ l%string a%obj) (at level 50) : object_scope.
+Fixpoint select l A a : Obj (assoc A l) :=
+  preselect l A (assoc A) (domain A) a a.
+Notation "a # l" := (select l%string _ a%obj) (at level 50) : object_scope.
 
 Fixpoint preupdate l (A : type) (f : string -> type) (d : list string)
-          (po : Preobject A f d) :
-      Method A (f l) -> Preobject A f d :=
-      match
-        po
-      with
-      | poempty A f => fun _ => poempty A f
-      | pocons A f d l1 m p =>
-          fun m1 =>
-          match
-            string_dec l l1
-          with
+         (po : Preobject A f d) :
+  Method A (f l) -> Preobject A f d :=
+  match
+    po
+  with
+    | poempty A f => fun _ => poempty A f
+    | pocons A f d l1 m p =>
+      fun m1 =>
+        match
+          string_dec l l1
+        with
           | left e =>
-              pocons A f d l1
-                (eq_rect l (fun l2 => Method A (f l2)) m1 l1 e) p
+            pocons A f d l1
+                   (eq_rect l (fun l2 => Method A (f l2)) m1 l1 e) p
           | right n =>
-              pocons A f d l1 m (preupdate l A f d p m1)
-          end
-      end.
+            pocons A f d l1 m (preupdate l A f d p m1)
+        end
+  end.
 
 Definition update A l (a : Obj A) m :=
   preupdate l A (assoc A) (domain A) a m.
 
 Notation "o ## l ⇐ 'ς' ( x !: A ) m" := (update A l%string o (Make_meth A (assoc A l) (fun x => m))) (at level 50).
 
+(* Specification of select: *)
+(* - preselect l A f (cons l d) (pocons A f d l m1 po) = Eval_meth m1 *)
+(* - l <> l2 -> preselect l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = preselect l A f d po *)
+
+Theorem presel_cons_eq l A f d m1 po : preselect l A f (cons l d) (pocons A f d l m1 po) = Eval_meth _ _ m1.
+Proof.
+  unfold preselect.
+  rewrite string_dec_refl.
+  reflexivity.
+Qed.
+
+Theorem presel_cons_diff l l2 A f d m1 po :
+  l <> l2 ->
+  preselect l A f (cons l2 d) (pocons A f d l2 m1 po)
+  = preselect l A f d po.
+Proof.
+  intro diff.
+  unfold preselect.
+  case (string_dec l l2).
+  - intro eq.
+    destruct (diff eq).
+  - intro diff2.
+    reflexivity.
+Qed.
 
 (* Specification of update: *)
 (* - preupdate l A f nil (poempty A f) m = poempty A f *)
 (* - preupdate l A f (cons l d) (pocons A f d l m1 po) m2 = pocons A f d l m2 po *)
-(* - l <> l2 -> preupdate l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = pocons A f d l2 m1 (preupdate l A f d p m1) *)
+(* - l <> l2 -> preupdate l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = pocons A f d l2 m1 (preupdate l A f d po m1) *)
 
 Theorem preup_empty A f l m : preupdate l A f nil (poempty A f) m = poempty A f.
   reflexivity.
-  Qed.
-
-Theorem bool_dec_refl b : Bool.bool_dec b b = left (eq_refl b).
-induction b ; reflexivity.
-Qed.  
-
-Theorem ascii_dec_refl a : Ascii.ascii_dec a a = left (eq_refl a).
-induction a.
-unfold Ascii.ascii_dec.
-unfold Ascii.ascii_rec.
-unfold Ascii.ascii_rect.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-rewrite bool_dec_refl.
-reflexivity.
 Qed.
-
-Lemma string_dec_cons_eq1 a l :
-  string_dec (String a l) (String a l) =
-  match Ascii.ascii_dec a a with
-    | left a0 =>
-      eq_rec_r
-        (fun a' => {String a' l = String a l} + {String a' l <> String a l})
-        match string_dec l l with
-          | left a3 =>
-            eq_rec_r
-              (fun s => {String a s = String a l} + {String a s <> String a l})
-              (left eq_refl) a3
-          | right diseq =>
-            right
-              (fun absurd : String a l = String a l =>
-                 diseq
-                   (f_equal
-                      (fun e =>
-                         match e with
-                           | ""%string => l
-                           | String _ s => s
-                         end) absurd))
-        end a0
-    | right diseq =>
-      right
-        (fun absurd : String a l = String a l =>
-           diseq
-             (f_equal
-                (fun e =>
-                   match e with
-                     | ""%string => a
-                     | String a _ => a
-                   end) absurd))
-  end.
-Proof.
-  reflexivity.
-Qed.
-
-Lemma string_dec_cons_eq2 a l :
-  string_dec (String a l) (String a l) =
-  match string_dec l l with
-    | left a3 =>
-      eq_rec_r
-        (fun s => {String a s = String a l} + {String a s <> String a l})
-        (left eq_refl) a3
-    | right diseq =>
-      right
-        (fun absurd : String a l = String a l =>
-           diseq
-             (f_equal
-                (fun e =>
-                   match e with
-                     | ""%string => l
-                     | String _ s => s
-                   end) absurd))
-  end.
-Proof.
-  rewrite string_dec_cons_eq1.
-  rewrite ascii_dec_refl.
-  reflexivity.
-Qed.
-
-Theorem string_dec_refl l : string_dec l l = left (eq_refl l).
-induction l.
- - reflexivity.
- - rewrite string_dec_cons_eq2.
-   rewrite IHl.
-   reflexivity.
-Qed.   
 
 Theorem preup_cons_eq A f d l po m1 m2 : preupdate l A f (cons l d) (pocons A f d l m1 po) m2 = pocons A f d l m2 po.
 Proof.
@@ -267,13 +298,13 @@ Definition Bool A : type :=
 
 Definition true A : Obj (Bool A) :=
   [ "if" = ς(x !: Bool A) (x#"then") ;
-     "then" = ς(x !: Bool A) (x#"then") ;
-     "else" = ς(x !: Bool A) (x#"else") ]%obj.
+    "then" = ς(x !: Bool A) (x#"then") ;
+    "else" = ς(x !: Bool A) (x#"else") ]%obj.
 
 Definition false A : Obj (Bool A) :=
   [ "if" = ς(x !: Bool A) (x#"else") ;
-     "then" = ς(x !: Bool A) (x#"then") ;
-     "else" = ς(x !: Bool A) (x#"else") ]%obj.
+    "then" = ς(x !: Bool A) (x#"then") ;
+    "else" = ς(x !: Bool A) (x#"else") ]%obj.
 
 Theorem true_select A : ((true A)#"if")%obj = ((true A)#"then")%obj.
   reflexivity.
@@ -285,7 +316,7 @@ Definition Ifthenelse A b t e :=
 Notation "'IF' b 'THEN' t 'ELSE' e" := (Ifthenelse _ b t e) (at level 50) : object_scope.
 
 Lemma eq_rect_refl A a (P : A -> Type) (H : P a) : @eq_rect_r A a P H a eq_refl = H.
-reflexivity.
+  reflexivity.
 Qed.
 
 Theorem if_true A b c : Ifthenelse A (true A) b c = b.
@@ -349,4 +380,3 @@ Proof.
   rewrite beta.
   reflexivity.
 Qed.
-
