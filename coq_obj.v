@@ -383,17 +383,15 @@ Section examples.
     [ "if" : A ; "then" : A ; "else" : A ]%ty.
 
   Definition true A : Obj (Bool A) :=
-    [ "if" = ς(x !: Bool A) (x#"then") ;
-      "then" = ς(x !: Bool A) (x#"then") ;
-      "else" = ς(x !: Bool A) (x#"else") ]%obj.
+    [ "if" = ς(x !: Bool A) (x#"then") ]%obj.
 
   Definition false A : Obj (Bool A) :=
-    [ "if" = ς(x !: Bool A) (x#"else") ;
-      "then" = ς(x !: Bool A) (x#"then") ;
-      "else" = ς(x !: Bool A) (x#"else") ]%obj.
+    [ "if" = ς(x !: Bool A) (x#"else") ]%obj.
 
   Theorem true_select A : ((true A)#"if")%obj = ((true A)#"then")%obj.
   Proof.
+    simpl.
+    rewrite beta.
     reflexivity.
   Qed.
 
@@ -430,8 +428,7 @@ Section examples.
   Infix "→" := Arrow (at level 50).
 
   Definition Lambda A B (f : Obj A -> Obj B) : Obj (A → B) :=
-    [ "arg" = ς(x !: A → B) (x#"arg") ;
-      "val" = ς(x !: A → B) (f (x#"arg")) ]%obj.
+    [ "val" = ς(x !: A → B) (f (x#"arg")) ]%obj.
 
   Notation "'λ' ( x !: A ) b" := (Lambda A _ (fun x : Obj A => b)) (at level 50).
 
