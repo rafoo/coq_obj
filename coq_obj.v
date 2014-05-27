@@ -168,13 +168,6 @@ Section objects.
   Parameter Make_meth : forall A B, (Obj A -> Obj B) -> Method A B.
   Axiom beta : forall A B f a, Eval_meth A B (Make_meth A B f) a = f a.
 
-  (* For notation purpose, we construct objects using couples of labels and methods *)
-  Definition pocons2 A f d (lm : sigT (fun l2 => Method A (f l2))) (po : Preobject A f d) :
-    let (l, _) := lm in
-    Preobject A f (cons l d) :=
-    let (l, m) as s return (let (l, _) := s in Preobject A f (l :: d)) := lm in
-    pocons A f d l m po.
-
   (* We will often need to test wether a label is in a domain
      so we reimplement the decidable membership test on lists of strings. *)
   Fixpoint in_dom l d :=
@@ -194,7 +187,6 @@ Bind Scope object_scope with Preobject.
 Notation "l = 'ς' ( x !: A ) m" :=
   (existT (fun l2 => Method A (assoc A l2)) l%string (Make_meth A (assoc A l) (fun x => m%obj)))
     (at level 50) : method_scope.
-Notation "[ m1 ; .. ; mn ]" := (pocons2 _ _ _ m1%meth (.. (pocons2 _ _ _ mn%meth (poempty _ _)) .. )) : object_scope.
 
 Notation "l ∈ d" := (in_dom l d = true) (at level 60).
 Notation "l ∉ d" := (~ l ∈ d) (at level 60).
@@ -376,6 +368,14 @@ Section init.
 
   Definition init A : Obj A := preinit A (domain A) (fun _ H => H).
 End init.
+
+(* Definition of objects without respecting the order of labels given by the type. *)
+Definition pocons_3 A (lm : sigT (fun l2 => Method A (assoc A l2))) (a : Obj A) :
+  Obj A :=
+  let (l, m) := lm in
+  update A l a m.
+
+Notation "[ m1 ; .. ; mn ]" := (pocons_3 _ m1%meth (.. (pocons_3 _ mn%meth (init _)) .. )) : object_scope.
 
 Section examples.
   (* Encodding of booleans *)
