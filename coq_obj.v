@@ -219,46 +219,24 @@ Section semantics.
 
   (* preselect was actually defined in proof mode like this: *)
 
-  (* Definition preselect l A d (po : Preobject A (assoc A) d) : *)
-  (*   l ∈ d -> Obj A -> Obj (assoc A l). *)
-  (* Proof. *)
-  (*   induction po as [ | A f d l2 m tail ]. *)
-  (*   - intro H. *)
-  (*     destruct (not_in_nil l H). *)
-  (*   - simpl. *)
-  (*     case (string_dec l l2). *)
-  (*     + intros e _. *)
-  (*       destruct e. *)
-  (*       apply Eval_meth. *)
-  (*       assumption. *)
-  (*     + intro. *)
-  (*       assumption. *)
-  (* Defined. *)
+  Fixpoint preselect l A f d (po : Preobject A f d) :
+    l ∈ d -> Obj A -> Obj (f l).
+  Proof.
+    destruct po as [ | A f d l2 m tail ].
+    - intro H.
+      destruct (not_in_nil l H).
+    - simpl.
+      case (string_dec l l2).
+      + intros e _.
+        destruct e.
+        apply Eval_meth.
+        assumption.
+      + intro.
+        apply preselect.
+        assumption.
+  Defined.
 
-  (* This trivial lemma was used to make Coq print the unfolded definition of preselct. *)
-  (*   Lemma prerefl l A d po H a :  preselect l A d po H a = preselect l A d po H a. *)
-  (*   unfold preselect, Preobject_rect. *)
-  (*   simpl. *)
-
-  Fixpoint preselect l A f d (p : Preobject A f d) :
-    l ∈ d -> Obj A -> Obj (f l) :=
-    match p with
-      | poempty _ _ => fun H => match not_in_nil l H with end
-      | pocons A f d0 l1 m p0 =>
-        match
-          string_dec l l1 as s
-          return
-          ((if s then true else in_dom l d0) = true ->
-           Obj A -> Obj (f l))
-        with
-          | left e => fun _ => match e with
-                                 | eq_refl => Eval_meth A (f l)
-                               end m
-          | right _ => preselect l A f d0 p0
-        end
-    end.
-
-  Fixpoint select l A a (H : l ∈ (domain A)) : Obj (assoc A l) :=
+  Definition select l A a (H : l ∈ (domain A)) : Obj (assoc A l) :=
     preselect l A (assoc A) (domain A) a H a.
 
   Fixpoint preupdate l (A : type) (f : string -> type) (d : list string)
@@ -390,6 +368,7 @@ Section examples.
 
   Theorem true_select A : ((true A)#"if")%obj = ((true A)#"then")%obj.
   Proof.
+    unfold select.
     simpl.
     rewrite beta.
     reflexivity.
@@ -403,6 +382,9 @@ Section examples.
   Theorem if_true A b c : Ifthenelse A (true A) b c = b.
   Proof.
     unfold Ifthenelse.
+    unfold update.
+    simpl.
+    unfold select.
     simpl.
     rewrite beta.
     simpl.
@@ -413,6 +395,9 @@ Section examples.
   Theorem if_false A b c : Ifthenelse A (false A) b c = c.
   Proof.
     unfold Ifthenelse.
+    unfold update.
+    simpl.
+    unfold select.
     simpl.
     rewrite beta.
     simpl.
@@ -440,6 +425,7 @@ Section examples.
   Theorem beta_red A B f c : (Lambda A B f) @ c = f c.
   Proof.
     unfold Lambda, App.
+    unfold update, select.
     simpl ; rewrite beta.
     apply f_equal.
     simpl ; rewrite beta.
