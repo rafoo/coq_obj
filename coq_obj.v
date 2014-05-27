@@ -136,6 +136,20 @@ Section objects.
 
    *)
 
+  (* We have to axiomatize the type of methods because
+   Method A B := Obj A -> Obj B has a negative occurence of Obj which blocks
+   the recursive definition
+   *)
+
+  Parameter Method : type -> type -> Type.
+
+  Inductive Preobject : type -> (string -> type) -> list string -> Type :=
+  | poempty : forall A f, Preobject A f nil
+  | pocons : forall A f d (l : string),
+               Method A (f l) ->
+               Preobject A f d ->
+               Preobject A f (cons l d).
+
   Fixpoint assoc (A : type) : string -> type :=
     fun l =>
       match A with
@@ -153,22 +167,9 @@ Section objects.
       | Cons_type l _ C => cons l (domain C)
     end.
 
-  (* We have to axiomatize the type of methods because
-   Method A B := Obj A -> Obj B has a negative occurence of Obj which blocks
-   the recursive definition
-   *)
-
-  Parameter Method : type -> type -> Type.
-
-  Inductive Preobject : type -> (string -> type) -> list string -> Type :=
-  | poempty : forall A f, Preobject A f nil
-  | pocons : forall A f d (l : string),
-               Method A (f l) ->
-               Preobject A f d ->
-               Preobject A f (cons l d).
-
   Definition Obj A := Preobject A (assoc A) (domain A).
 
+  (* End of the axiomatisation of methods: Method A B is equivalent to Obj A -> Obj B. *)
   Parameter Eval_meth : forall A B, Method A B -> Obj A -> Obj B.
   Parameter Make_meth : forall A B, (Obj A -> Obj B) -> Method A B.
   Axiom beta : forall A B f a, Eval_meth A B (Make_meth A B f) a = f a.
@@ -179,6 +180,15 @@ Section objects.
     Preobject A f (cons l d) :=
     let (l, m) as s return (let (l, _) := s in Preobject A f (l :: d)) := lm in
     pocons A f d l m po.
+
+  (* We will often need to test wether a label is in a domain
+     so we reimplement the decidable membership test on lists of strings. *)
+  Fixpoint in_dom l d :=
+    match d with
+      | nil => false
+      | cons l2 d =>
+        if (string_dec l l2) then true else in_dom l d
+    end.
 End objects.
 
 Delimit Scope object_scope with obj.
@@ -192,13 +202,6 @@ Notation "l = 'ς' ( x !: A ) m" :=
     (at level 50) : method_scope.
 Notation "[ m1 ; .. ; mn ]" := (pocons2 _ _ _ m1%meth (.. (pocons2 _ _ _ mn%meth (poempty _ _)) .. )) : object_scope.
 
-Fixpoint in_dom l d :=
-  match d with
-    | nil => false
-    | cons l2 d =>
-      if (string_dec l l2) then true else in_dom l d
-  end.
-
 Notation "l ∈ d" := (in_dom l d = true) (at level 60).
 Notation "l ∉ d" := (~ l ∈ d) (at level 60).
 
@@ -207,7 +210,7 @@ Section semantics.
 
   Definition empty_object := poempty Empty_type (assoc Empty_type).
 
-
+  (* Properties of ∈ *)
   Lemma not_in_nil l : l ∉ nil.
   Proof.
     discriminate.
@@ -228,6 +231,7 @@ Section semantics.
     case (string_dec l1 l2) ; reflexivity.
   Defined.
 
+  (* preselect was actually defined in proof mode like this: *)
 
   (* Definition preselect l A d (po : Preobject A (assoc A) d) : *)
   (*   l ∈ d -> Obj A -> Obj (assoc A l). *)
@@ -245,10 +249,10 @@ Section semantics.
   (*       assumption. *)
   (* Defined. *)
 
+  (* This trivial lemma was used to make Coq print the unfolded definition of preselct. *)
   (*   Lemma prerefl l A d po H a :  preselect l A d po H a = preselect l A d po H a. *)
   (*   unfold preselect, Preobject_rect. *)
   (*   simpl. *)
-
 
   Fixpoint preselect l A f d (p : Preobject A f d) :
     l ∈ d -> Obj A -> Obj (f l) :=
@@ -295,8 +299,6 @@ Section semantics.
     preupdate l A (assoc A) (domain A) a m.
 
   (* Specification of select: *)
-  (* - preselect l A f (cons l d) (pocons A f d l m1 po) = Eval_meth m1 *)
-  (* - l <> l2 -> preselect l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = preselect l A f d po *)
 
   Theorem presel_cons_eq l A f d m1 po : preselect l A f (cons l d) (pocons A f d l m1 po) (in_cons_hd l d) = Eval_meth _ _ m1.
   Proof.
@@ -305,8 +307,6 @@ Section semantics.
     rewrite (string_dec_refl).
     reflexivity.
   Qed.
-
-
 
   Theorem presel_cons_diff l l2 A f d m1 po H :
     l <> l2 ->
@@ -326,9 +326,6 @@ Section semantics.
   Qed.
 
   (* Specification of update: *)
-  (* - preupdate l A f nil (poempty A f) m = poempty A f *)
-  (* - preupdate l A f (cons l d) (pocons A f d l m1 po) m2 = pocons A f d l m2 po *)
-  (* - l <> l2 -> preupdate l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = pocons A f d l2 m1 (preupdate l A f d po m1) *)
 
   Theorem preup_empty A f l m : preupdate l A f nil (poempty A f) m = poempty A f.
   Proof.
@@ -460,6 +457,9 @@ Section examples.
 End examples.
 
 Section subtyping.
+  (* We define directly type_dec instead of using the decide equality tactic
+     in order to get an easier proof of type_dec_refl. *)
+
   Lemma diff_empty_cons l A B : Empty_type <> Cons_type l A B.
   Proof.
     discriminate.
@@ -497,8 +497,6 @@ Section subtyping.
       | Cons_type _ _ A => A
     end.
 
-  (* We define directly type_dec instead of using the decide equality tactic
-   in order to get an easier proof of type_dec_refl. *)
   Fixpoint type_dec (A B : type) : {A = B} + {A <> B} :=
     match A with
       | Empty_type =>
@@ -546,6 +544,7 @@ Section subtyping.
       reflexivity.
   Qed.
 
+  (* Definition of the subtyping relation: A <: B if B is a subset of A. *)
   Fixpoint Subtype A B :=
     match B with
       | Empty_type => True
@@ -573,7 +572,7 @@ Section subtyping.
   Section subtype_reflexivity.
 
     (* Unfortunately, the theorem forall A, A <: A is false
-   when A has several occurences of the same label *)
+       when A has several occurences of the same label *)
     (* Hence we can only prove it for well-formed types: types without duplicates. *)
     Fixpoint well_formed_type A :=
       match A with
@@ -620,6 +619,9 @@ Section subtyping.
           * assumption.
     Defined.
   End subtype_reflexivity.
+
+  (* The goal of the reminding of this section is to define a function
+     coerce : forall A B, A <: B -> Obj A -> Obj B *)
 
   Lemma precast A B d : Obj A -> (forall l, l ∈ d -> l ∈ domain A) -> Preobject B (assoc A) d.
   Proof.
