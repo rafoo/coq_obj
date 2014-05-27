@@ -6,23 +6,22 @@ Section string_dec.
      string_dec_refl l : string_dec l l = left (eq_refl l)
    *)
 
+  Lemma eq_rect_refl A a (P : A -> Type) (H : P a) :
+    @eq_rect_r A a P H a eq_refl = H.
+  Proof.
+    reflexivity.
+  Qed.
+
   Theorem bool_dec_refl b : Bool.bool_dec b b = left (eq_refl b).
+  Proof.
     induction b ; reflexivity.
   Qed.
 
   Theorem ascii_dec_refl a : Ascii.ascii_dec a a = left (eq_refl a).
+  Proof.
     induction a.
-    unfold Ascii.ascii_dec.
-    unfold Ascii.ascii_rec.
-    unfold Ascii.ascii_rect.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
-    rewrite bool_dec_refl.
+    unfold Ascii.ascii_dec, Ascii.ascii_rec, Ascii.ascii_rect.
+    repeat rewrite bool_dec_refl.
     reflexivity.
   Qed.
 
@@ -88,6 +87,7 @@ Section string_dec.
   Qed.
 
   Theorem string_dec_refl l : string_dec l l = left (eq_refl l).
+  Proof.
     induction l.
     - reflexivity.
     - rewrite string_dec_cons_eq2.
@@ -267,6 +267,7 @@ Qed.
 (* - l <> l2 -> preupdate l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = pocons A f d l2 m1 (preupdate l A f d po m1) *)
 
 Theorem preup_empty A f l m : preupdate l A f nil (poempty A f) m = poempty A f.
+Proof.
   reflexivity.
 Qed.
 
@@ -307,6 +308,7 @@ Definition false A : Obj (Bool A) :=
     "else" = ς(x !: Bool A) (x#"else") ]%obj.
 
 Theorem true_select A : ((true A)#"if")%obj = ((true A)#"then")%obj.
+Proof.
   reflexivity.
 Qed.
 
@@ -314,10 +316,6 @@ Definition Ifthenelse A b t e :=
   (((b##"then" ⇐ ς(x !: Bool A) t)##"else" ⇐ ς(x !: Bool A) e)#"if")%obj.
 
 Notation "'IF' b 'THEN' t 'ELSE' e" := (Ifthenelse _ b t e) (at level 50) : object_scope.
-
-Lemma eq_rect_refl A a (P : A -> Type) (H : P a) : @eq_rect_r A a P H a eq_refl = H.
-  reflexivity.
-Qed.
 
 Theorem if_true A b c : Ifthenelse A (true A) b c = b.
 Proof.
@@ -363,20 +361,9 @@ Infix "@" := (App _ _) (at level 50).
 
 Theorem beta_red A B f c : (Lambda A B f) @ c = f c.
 Proof.
-  unfold Lambda.
-  unfold App.
-  unfold update.
-  unfold preupdate.
-  simpl.
-  unfold select.
-  unfold preselect.
-  simpl.
-  rewrite eq_rect_refl.
-  rewrite beta.
+  unfold Lambda, App.
+  simpl ; rewrite eq_rect_refl ; rewrite beta.
   apply f_equal.
-  unfold string_dec.
-  simpl.
-  rewrite eq_rect_refl.
-  rewrite beta.
+  simpl ; rewrite eq_rect_refl ; rewrite beta.
   reflexivity.
 Qed.
