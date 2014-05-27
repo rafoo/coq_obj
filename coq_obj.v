@@ -332,115 +332,285 @@ Section examples.
     rewrite eq_rect_refl.
     rewrite beta.
     reflexivity.
-(* Subtyping *)
+  Qed.
 
-Lemma diff_empty_cons l A B : Empty_type <> Cons_type l A B.
-Proof.
-  discriminate.
-Defined.
+  Theorem if_false A b c : Ifthenelse A (false A) b c = c.
+  Proof.
+    unfold Ifthenelse.
+    simpl.
+    rewrite eq_rect_refl.
+    rewrite beta.
+    simpl.
+    rewrite eq_rect_refl.
+    rewrite beta.
+    reflexivity.
+  Qed.
 
-Lemma diff_cons_empty l A B : Cons_type l A B <> Empty_type.
-Proof.
-  discriminate.
-Defined.
+  (* Encodding of the simply-typed λ-calculus *)
 
-Lemma eq_cons_cons lA A1 A2 lB B1 B2 : lA = lB -> A1 = B1 -> A2 = B2 -> Cons_type lA A1 A2 = Cons_type lB B1 B2.
-Proof.
-  intros.
-  destruct H.
-  destruct H0.
-  destruct H1.
-  reflexivity.
-Defined.
+  Definition Arrow A B :=
+    [ "arg" : A ; "val" : B ]%ty.
 
-Definition eq_cons_cons_1 C :=
-  match C with
-    | Empty_type => ""%string
-    | Cons_type l _ _ => l
-  end.
+  Infix "→" := Arrow (at level 50).
 
-Definition eq_cons_cons_2 C :=
-  match C with
-    | Empty_type => Empty_type
-    | Cons_type _ A _ => A
-  end.
+  Definition Lambda A B (f : Obj A -> Obj B) : Obj (A → B) :=
+    [ "arg" = ς(x !: A → B) (x#"arg") ;
+      "val" = ς(x !: A → B) (f (x#"arg")) ]%obj.
 
-Definition eq_cons_cons_3 C :=
-  match C with
-    | Empty_type => Empty_type
-    | Cons_type _ _ A => A
-  end.
+  Notation "'λ' ( x !: A ) b" := (Lambda A _ (fun x : Obj A => b)) (at level 50).
 
-Fixpoint type_dec (A B : type) : {A = B} + {A <> B} :=
-  match A with
-    | Empty_type =>
-      match B with
-        | Empty_type => left eq_refl
-        | Cons_type lB B1 B2 => right (diff_empty_cons lB B1 B2)
-      end
-    | Cons_type lA A1 A2 =>
-      match B with
-        | Empty_type => right (diff_cons_empty lA A1 A2)
-        | Cons_type lB B1 B2 =>
-          match string_dec lA lB with
-            | left el =>
-              match type_dec A1 B1 with
-                | left e1 =>
-                  match type_dec A2 B2 with
-                    | left e2 =>
-                      left (eq_cons_cons lA A1 A2 lB B1 B2 el e1 e2)
-                    | right n2 =>
-                      right
-                        (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
-                           n2 (f_equal eq_cons_cons_3 H))
-                  end
-                | right n1 =>
-                  right
-                    (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
-                       n1 (f_equal eq_cons_cons_2 H))
-              end
-            | right nl =>
-              right
-                (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
-                   nl (f_equal eq_cons_cons_1 H))
-          end
-      end
-  end.
+  Definition App A B (f : Obj (A → B)) (a : Obj A) : Obj B :=
+    ((f##"arg" ⇐ ς(x !: A → B) a)#"val")%obj.
 
-Theorem type_dec_refl A : type_dec A A = left (eq_refl A).
-Proof.
-  induction A.
-   - reflexivity.
-   - simpl.
-     rewrite string_dec_refl.
-     rewrite IHA1.
-     rewrite IHA2.
-     reflexivity.
-Qed.
+  Infix "@" := (App _ _) (at level 50).
 
-Fixpoint Subtype A B :=
-  match A with
-    | Empty_type => True
-    | Cons_type l A1 A2 =>
-      List.In l (domain B) /\ A1 = assoc B l /\ Subtype A2 B
-  end.
+  Theorem beta_red A B f c : (Lambda A B f) @ c = f c.
+  Proof.
+    unfold Lambda, App.
+    simpl ; rewrite eq_rect_refl ; rewrite beta.
+    apply f_equal.
+    simpl ; rewrite eq_rect_refl ; rewrite beta.
+    reflexivity.
+  Qed.
+End examples.
 
-Infix "<:" := Subtype (at level 60).
+Section subtyping.
+  Lemma diff_empty_cons l A B : Empty_type <> Cons_type l A B.
+  Proof.
+    discriminate.
+  Defined.
 
-Lemma subtype_cons A B l C :
-  A <: B ->
-       ~ List.In l (domain B) ->
-       A <: Cons_type l C B.
-Proof.
-  induction A ; intros.
-  - exact I.
-  - simpl.
-    destruct H as (H1, H2).
-    case (string_dec s l) ; intro.
-    + destruct e.
-      destruct (H0 H1).
-    + intuition.
-Qed.
+  Lemma diff_cons_empty l A B : Cons_type l A B <> Empty_type.
+  Proof.
+    discriminate.
+  Defined.
 
-(* Unfortunately, the theorem forall A, A <: A is false
+  Lemma eq_cons_cons lA A1 A2 lB B1 B2 : lA = lB -> A1 = B1 -> A2 = B2 -> Cons_type lA A1 A2 = Cons_type lB B1 B2.
+  Proof.
+    intros.
+    destruct H.
+    destruct H0.
+    destruct H1.
+    reflexivity.
+  Defined.
+
+  Definition eq_cons_cons_1 C :=
+    match C with
+      | Empty_type => ""%string
+      | Cons_type l _ _ => l
+    end.
+
+  Definition eq_cons_cons_2 C :=
+    match C with
+      | Empty_type => Empty_type
+      | Cons_type _ A _ => A
+    end.
+
+  Definition eq_cons_cons_3 C :=
+    match C with
+      | Empty_type => Empty_type
+      | Cons_type _ _ A => A
+    end.
+
+  (* We define directly type_dec instead of using the decide equality tactic
+   in order to get an easier proof of type_dec_refl. *)
+  Fixpoint type_dec (A B : type) : {A = B} + {A <> B} :=
+    match A with
+      | Empty_type =>
+        match B with
+          | Empty_type => left eq_refl
+          | Cons_type lB B1 B2 => right (diff_empty_cons lB B1 B2)
+        end
+      | Cons_type lA A1 A2 =>
+        match B with
+          | Empty_type => right (diff_cons_empty lA A1 A2)
+          | Cons_type lB B1 B2 =>
+            match string_dec lA lB with
+              | left el =>
+                match type_dec A1 B1 with
+                  | left e1 =>
+                    match type_dec A2 B2 with
+                      | left e2 =>
+                        left (eq_cons_cons lA A1 A2 lB B1 B2 el e1 e2)
+                      | right n2 =>
+                        right
+                          (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
+                             n2 (f_equal eq_cons_cons_3 H))
+                    end
+                  | right n1 =>
+                    right
+                      (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
+                         n1 (f_equal eq_cons_cons_2 H))
+                end
+              | right nl =>
+                right
+                  (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
+                     nl (f_equal eq_cons_cons_1 H))
+            end
+        end
+    end.
+
+  Theorem type_dec_refl A : type_dec A A = left (eq_refl A).
+  Proof.
+    induction A.
+    - reflexivity.
+    - simpl.
+      rewrite string_dec_refl.
+      rewrite IHA1.
+      rewrite IHA2.
+      reflexivity.
+  Qed.
+
+  Infix "∈" := List.In (at level 65).
+  Notation "l ∉ d" := (~ l ∈ d) (at level 65).
+
+  Fixpoint Subtype A B :=
+    match B with
+      | Empty_type => True
+      | Cons_type l B1 B2 =>
+        List.In l (domain A) /\ B1 = assoc A l /\ Subtype A B2
+    end.
+
+  Infix "<:" := Subtype (at level 60).
+
+  Lemma subtype_cons A B l C :
+    A <: B ->
+         l ∉ domain A ->
+         Cons_type l C A <: B.
+  Proof.
+    induction B ; intros.
+    - exact I.
+    - simpl.
+      destruct H as (H1, H2).
+      case (string_dec s l) ; intro.
+      + destruct e.
+        destruct (H0 H1).
+      + intuition.
+  Qed.
+
+  Section subtype_reflexivity.
+
+    (* Unfortunately, the theorem forall A, A <: A is false
    when A has several occurences of the same label *)
+    (* Hence we can only prove it for well-formed types: types without duplicates. *)
+    Fixpoint well_formed_type A :=
+      match A with
+        | Empty_type => True
+        | Cons_type l A1 A2 => l ∉ domain A2 /\ well_formed_type A2
+      end.
+
+    Theorem well_formed_dec A : {well_formed_type A} + {~ well_formed_type A}.
+    Proof.
+      induction A.
+      - left.
+        exact I.
+      - simpl.
+        destruct IHA2.
+        + destruct (List.in_dec string_dec s (domain A2)).
+          * right.
+            intro H.
+            destruct H as (H1, H2).
+            exact (H1 i).
+          * left.
+            split ; [exact n | exact w].
+        + right.
+          intro H.
+          destruct H as (H1, H2).
+          exact (n H2).
+    Defined.
+
+    Theorem subtype_refl A : well_formed_type A -> A <: A.
+    Proof.
+      intro.
+      induction A.
+      - exact I.
+      - simpl in *.
+        split.
+        + left ; reflexivity.
+        + rewrite string_dec_refl.
+          intuition.
+          apply subtype_cons ; assumption.
+    Defined.
+  End subtype_reflexivity.
+
+  Lemma precast A B d : Obj A -> Preobject B (assoc A) d.
+  Proof.
+    intro a.
+    induction d as [ |  l d].
+    - apply poempty.
+    - apply pocons.
+      + apply Make_meth.
+        intro self.
+        exact (a#l)%obj.
+      + assumption.
+  Defined.
+
+  Definition ocast A B : Obj A -> Preobject B (assoc A) (domain B) :=
+    precast A B (domain B).
+
+  Lemma meth_eq A B1 B2 : B2 = B1 -> Method A B1 -> Method A B2.
+    intros.
+    rewrite H.
+    assumption.
+  Defined.
+
+  Lemma coerce_1 A f g d : (forall l, l ∈ d -> f l = g l) -> Preobject A f d -> Preobject A g d.
+  Proof.
+    intros.
+    induction X.
+    - apply poempty.
+    - apply pocons.
+      + rewrite (H l (List.in_eq l d)) in m.
+        assumption.
+      + apply IHX.
+        intros.
+        apply (H l0).
+        apply List.in_cons.
+        assumption.
+  Defined.
+
+  Lemma domain_subtype A B l : A <: B -> l ∈ domain B -> l ∈ domain A.
+  Proof.
+    intros.
+    induction B.
+    - destruct H0.
+    - destruct H0.
+      + destruct H0.
+        destruct H.
+        assumption.
+      + apply IHB2.
+        * destruct H.
+          destruct H1.
+          assumption.
+        * assumption.
+  Defined.
+
+  Lemma assoc_subtype A B l : A <: B -> l ∈ domain B -> assoc A l = assoc B l.
+  Proof.
+    intros.
+    induction B.
+    - destruct H0.
+    - simpl.
+      case (string_dec l s) ; intro.
+      + destruct e.
+        destruct H as (_, (H, _)).
+        symmetry.
+        assumption.
+      + apply IHB2.
+        * destruct H as (_, (_, H)).
+          assumption.
+        * destruct H0.
+          destruct H0.
+          destruct (n eq_refl).
+          assumption.
+  Defined.
+
+  Definition coerce A B : A <: B -> Obj A -> Obj B.
+  Proof.
+    intros.
+    apply (coerce_1 B (assoc A) (assoc B) (domain B)).
+    - intros.
+      apply assoc_subtype ; assumption.
+    - apply ocast ; assumption.
+  Defined.
+End subtyping.
