@@ -192,27 +192,84 @@ Notation "l = 'ς' ( x !: A ) m" :=
     (at level 50) : method_scope.
 Notation "[ m1 ; .. ; mn ]" := (pocons2 _ _ _ m1%meth (.. (pocons2 _ _ _ mn%meth (poempty _ _)) .. )) : object_scope.
 
+Fixpoint in_dom l d :=
+  match d with
+    | nil => false
+    | cons l2 d =>
+      if (string_dec l l2) then true else in_dom l d
+  end.
+
+Notation "l ∈ d" := (in_dom l d = true) (at level 60).
+Notation "l ∉ d" := (~ l ∈ d) (at level 60).
+
 Section semantics.
-  (* Since the calculus is not SN, we also axiomatize loops *)
-
-  Parameter loop : forall A, Obj A.
-
   (* Selection and update go inside objects so they have to be defined on preobjects first. *)
 
-  Fixpoint preselect l A f d (po : Preobject A f d) : Obj A -> Obj (f l) :=
-    match po with
-      | poempty _ _ => (fun _ => loop _)
-      | pocons A f d l2 m tail =>
-        match string_dec l l2 with
-          | left e =>
-            Eval_meth _ _
-                      (eq_rect_r (fun l1 => Method A (f l1)) m e)
-          | right _ => preselect _ _ _ _ tail
+  Definition empty_object := poempty Empty_type (assoc Empty_type).
+
+
+  Lemma not_in_nil l : l ∉ nil.
+  Proof.
+    discriminate.
+  Defined.
+
+  Lemma in_cons_hd l d : l ∈ (cons l d).
+  Proof.
+    simpl.
+    rewrite (string_dec_refl l).
+    reflexivity.
+  Defined.
+
+  Lemma in_cons_tl l1 l2 d : l1 ∈ d -> l1 ∈ (cons l2 d).
+  Proof.
+    simpl.
+    intro e.
+    rewrite e.
+    case (string_dec l1 l2) ; reflexivity.
+  Defined.
+
+
+  (* Definition preselect l A d (po : Preobject A (assoc A) d) : *)
+  (*   l ∈ d -> Obj A -> Obj (assoc A l). *)
+  (* Proof. *)
+  (*   induction po as [ | A f d l2 m tail ]. *)
+  (*   - intro H. *)
+  (*     destruct (not_in_nil l H). *)
+  (*   - simpl. *)
+  (*     case (string_dec l l2). *)
+  (*     + intros e _. *)
+  (*       destruct e. *)
+  (*       apply Eval_meth. *)
+  (*       assumption. *)
+  (*     + intro. *)
+  (*       assumption. *)
+  (* Defined. *)
+
+  (*   Lemma prerefl l A d po H a :  preselect l A d po H a = preselect l A d po H a. *)
+  (*   unfold preselect, Preobject_rect. *)
+  (*   simpl. *)
+
+
+  Fixpoint preselect l A f d (p : Preobject A f d) :
+    l ∈ d -> Obj A -> Obj (f l) :=
+    match p with
+      | poempty _ _ => fun H => match not_in_nil l H with end
+      | pocons A f d0 l1 m p0 =>
+        match
+          string_dec l l1 as s
+          return
+          ((if s then true else in_dom l d0) = true ->
+           Obj A -> Obj (f l))
+        with
+          | left e => fun _ => match e with
+                                 | eq_refl => Eval_meth A (f l)
+                               end m
+          | right _ => preselect l A f d0 p0
         end
     end.
 
-  Fixpoint select l A a : Obj (assoc A l) :=
-    preselect l A (assoc A) (domain A) a a.
+  Fixpoint select l A a (H : l ∈ (domain A)) : Obj (assoc A l) :=
+    preselect l A (assoc A) (domain A) a H a.
 
   Fixpoint preupdate l (A : type) (f : string -> type) (d : list string)
            (po : Preobject A f d) :
@@ -241,24 +298,30 @@ Section semantics.
   (* - preselect l A f (cons l d) (pocons A f d l m1 po) = Eval_meth m1 *)
   (* - l <> l2 -> preselect l A f (cons l2 d) (pocons A f d l2 m1 po) m2 = preselect l A f d po *)
 
-  Theorem presel_cons_eq l A f d m1 po : preselect l A f (cons l d) (pocons A f d l m1 po) = Eval_meth _ _ m1.
+  Theorem presel_cons_eq l A f d m1 po : preselect l A f (cons l d) (pocons A f d l m1 po) (in_cons_hd l d) = Eval_meth _ _ m1.
   Proof.
-    unfold preselect.
-    rewrite string_dec_refl.
+    simpl.
+    unfold in_cons_hd.
+    rewrite (string_dec_refl).
     reflexivity.
   Qed.
 
-  Theorem presel_cons_diff l l2 A f d m1 po :
+
+
+  Theorem presel_cons_diff l l2 A f d m1 po H :
     l <> l2 ->
-    preselect l A f (cons l2 d) (pocons A f d l2 m1 po)
-    = preselect l A f d po.
+    preselect l A f (cons l2 d) (pocons A f d l2 m1 po) (in_cons_tl l l2 d H)
+    = preselect l A f d po H.
   Proof.
     intro diff.
-    unfold preselect.
+    simpl.
+    unfold in_cons_tl.
     case (string_dec l l2).
     - intro eq.
       destruct (diff eq).
     - intro diff2.
+      apply f_equal.
+      case H.
       reflexivity.
   Qed.
 
@@ -294,8 +357,34 @@ Section semantics.
   Qed.
 End semantics.
 
-Notation "a # l" := (select l%string _ a%obj) (at level 50) : object_scope.
+Notation "a # l" := (select l%string _ a%obj eq_refl) (at level 50) : object_scope.
 Notation "o ## l ⇐ 'ς' ( x !: A ) m" := (update A l%string o (Make_meth A (assoc A l) (fun x => m))) (at level 50).
+
+Section init.
+  Definition preinit A d :
+    (forall l, l ∈ d -> l ∈ domain A) ->
+    Preobject A (assoc A) d.
+  Proof.
+    induction d as [ | l d ].
+    - intro.
+      apply poempty.
+    - intro H.
+      apply pocons.
+      + apply Make_meth.
+        intro a.
+        apply select.
+        * exact a.
+        * apply H.
+          apply in_cons_hd.
+      + apply IHd.
+        intros l1 H1.
+        apply H.
+        apply in_cons_tl.
+        assumption.
+  Defined.
+
+  Definition init A : Obj A := preinit A (domain A) (fun _ H => H).
+End init.
 
 Section examples.
   (* Encodding of booleans *)
@@ -326,10 +415,8 @@ Section examples.
   Proof.
     unfold Ifthenelse.
     simpl.
-    rewrite eq_rect_refl.
     rewrite beta.
     simpl.
-    rewrite eq_rect_refl.
     rewrite beta.
     reflexivity.
   Qed.
@@ -338,10 +425,8 @@ Section examples.
   Proof.
     unfold Ifthenelse.
     simpl.
-    rewrite eq_rect_refl.
     rewrite beta.
     simpl.
-    rewrite eq_rect_refl.
     rewrite beta.
     reflexivity.
   Qed.
@@ -367,9 +452,9 @@ Section examples.
   Theorem beta_red A B f c : (Lambda A B f) @ c = f c.
   Proof.
     unfold Lambda, App.
-    simpl ; rewrite eq_rect_refl ; rewrite beta.
+    simpl ; rewrite beta.
     apply f_equal.
-    simpl ; rewrite eq_rect_refl ; rewrite beta.
+    simpl ; rewrite beta.
     reflexivity.
   Qed.
 End examples.
@@ -461,14 +546,11 @@ Section subtyping.
       reflexivity.
   Qed.
 
-  Infix "∈" := List.In (at level 65).
-  Notation "l ∉ d" := (~ l ∈ d) (at level 65).
-
   Fixpoint Subtype A B :=
     match B with
       | Empty_type => True
       | Cons_type l B1 B2 =>
-        List.In l (domain A) /\ B1 = assoc A l /\ Subtype A B2
+        l ∈ domain A /\ B1 = assoc A l /\ Subtype A B2
     end.
 
   Infix "<:" := Subtype (at level 60).
@@ -506,13 +588,13 @@ Section subtyping.
         exact I.
       - simpl.
         destruct IHA2.
-        + destruct (List.in_dec string_dec s (domain A2)).
+        + case (in_dom s (domain A2)).
           * right.
             intro H.
-            destruct H as (H1, H2).
-            exact (H1 i).
+            destruct H as (H, _).
+            destruct (H eq_refl).
           * left.
-            split ; [exact n | exact w].
+            split ; [discriminate | exact w].
         + right.
           intro H.
           destruct H as (H1, H2).
@@ -526,27 +608,62 @@ Section subtyping.
       - exact I.
       - simpl in *.
         split.
-        + left ; reflexivity.
         + rewrite string_dec_refl.
-          intuition.
-          apply subtype_cons ; assumption.
+          reflexivity.
+        + rewrite string_dec_refl.
+          split.
+          reflexivity.
+          destruct H.
+          apply subtype_cons.
+          * apply IHA2.
+            assumption.
+          * assumption.
     Defined.
   End subtype_reflexivity.
 
-  Lemma precast A B d : Obj A -> Preobject B (assoc A) d.
+  Lemma precast A B d : Obj A -> (forall l, l ∈ d -> l ∈ domain A) -> Preobject B (assoc A) d.
   Proof.
-    intro a.
+    intros a H.
     induction d as [ |  l d].
     - apply poempty.
     - apply pocons.
       + apply Make_meth.
         intro self.
-        exact (a#l)%obj.
-      + assumption.
+        apply select.
+        * exact a.
+        * apply (H l).
+          simpl.
+          rewrite string_dec_refl.
+          reflexivity.
+      + apply IHd.
+        intros.
+        apply H.
+        simpl.
+        rewrite H0.
+        case (string_dec l0 l) ; reflexivity.
   Defined.
 
-  Definition ocast A B : Obj A -> Preobject B (assoc A) (domain B) :=
-    precast A B (domain B).
+  Lemma domain_subtype A B l : A <: B -> l ∈ domain B -> l ∈ domain A.
+  Proof.
+    induction B ; simpl.
+    - discriminate.
+    - intro H ; destruct H as (H1, (H2, H3)).
+      case (string_dec l s) ; intros.
+      + destruct e.
+        assumption.
+      + apply IHB2.
+        * assumption.
+        * assumption.
+  Defined.
+
+  Definition ocast A B : A <: B -> Obj A -> Preobject B (assoc A) (domain B).
+  Proof.
+    intros.
+    apply precast.
+    - assumption.
+    - intro l.
+      apply domain_subtype ; assumption.
+  Defined.
 
   Lemma meth_eq A B1 B2 : B2 = B1 -> Method A B1 -> Method A B2.
     intros.
@@ -560,36 +677,26 @@ Section subtyping.
     induction X.
     - apply poempty.
     - apply pocons.
-      + rewrite (H l (List.in_eq l d)) in m.
-        assumption.
+      + assert (Method A (f l) = Method A (g l)).
+        * apply f_equal.
+          apply H.
+          apply in_cons_hd.
+        * rewrite H0 in m.
+          assumption.
       + apply IHX.
         intros.
         apply (H l0).
-        apply List.in_cons.
+        apply in_cons_tl.
         assumption.
-  Defined.
-
-  Lemma domain_subtype A B l : A <: B -> l ∈ domain B -> l ∈ domain A.
-  Proof.
-    intros.
-    induction B.
-    - destruct H0.
-    - destruct H0.
-      + destruct H0.
-        destruct H.
-        assumption.
-      + apply IHB2.
-        * destruct H.
-          destruct H1.
-          assumption.
-        * assumption.
   Defined.
 
   Lemma assoc_subtype A B l : A <: B -> l ∈ domain B -> assoc A l = assoc B l.
   Proof.
-    intros.
+    intro.
     induction B.
-    - destruct H0.
+    - intro H0.
+      apply not_in_nil in H0.
+      destruct H0.
     - simpl.
       case (string_dec l s) ; intro.
       + destruct e.
@@ -597,12 +704,8 @@ Section subtyping.
         symmetry.
         assumption.
       + apply IHB2.
-        * destruct H as (_, (_, H)).
-          assumption.
-        * destruct H0.
-          destruct H0.
-          destruct (n eq_refl).
-          assumption.
+        destruct H as (_, (_, H)).
+        assumption.
   Defined.
 
   Definition coerce A B : A <: B -> Obj A -> Obj B.
