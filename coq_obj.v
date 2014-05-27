@@ -6,12 +6,6 @@ Section string_dec.
      string_dec_refl l : string_dec l l = left (eq_refl l)
    *)
 
-  Lemma eq_rect_refl A a (P : A -> Type) (H : P a) :
-    @eq_rect_r A a P H a eq_refl = H.
-  Proof.
-    reflexivity.
-  Qed.
-
   Theorem bool_dec_refl b : Bool.bool_dec b b = left (eq_refl b).
   Proof.
     induction b ; reflexivity.
