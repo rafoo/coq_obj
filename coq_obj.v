@@ -367,3 +367,129 @@ Proof.
   simpl ; rewrite eq_rect_refl ; rewrite beta.
   reflexivity.
 Qed.
+
+(* Subtyping *)
+
+Lemma diff_empty_cons l A B : Empty_type <> Cons_type l A B.
+Proof.
+  discriminate.
+Defined.
+
+Lemma diff_cons_empty l A B : Cons_type l A B <> Empty_type.
+Proof.
+  discriminate.
+Defined.
+
+Lemma eq_cons_cons lA A1 A2 lB B1 B2 : lA = lB -> A1 = B1 -> A2 = B2 -> Cons_type lA A1 A2 = Cons_type lB B1 B2.
+Proof.
+  intros.
+  destruct H.
+  destruct H0.
+  destruct H1.
+  reflexivity.
+Defined.
+
+Definition eq_cons_cons_1 C :=
+  match C with
+    | Empty_type => ""%string
+    | Cons_type l _ _ => l
+  end.
+
+Definition eq_cons_cons_2 C :=
+  match C with
+    | Empty_type => Empty_type
+    | Cons_type _ A _ => A
+  end.
+
+Definition eq_cons_cons_3 C :=
+  match C with
+    | Empty_type => Empty_type
+    | Cons_type _ _ A => A
+  end.
+
+Fixpoint type_dec (A B : type) : {A = B} + {A <> B} :=
+  match A with
+    | Empty_type =>
+      match B with
+        | Empty_type => left (eq_refl Empty_type)
+        | Cons_type lB B1 B2 => right (diff_empty_cons lB B1 B2)
+      end
+    | Cons_type lA A1 A2 =>
+      match B with
+        | Empty_type => right (diff_cons_empty lA A1 A2)
+        | Cons_type lB B1 B2 =>
+          match string_dec lA lB with
+            | left el =>
+              match type_dec A1 B1 with
+                | left e1 =>
+                  match type_dec A2 B2 with
+                    | left e2 =>
+                      left (eq_cons_cons lA A1 A2 lB B1 B2 el e1 e2)
+                    | right n2 =>
+                      right (fun H =>
+                               n2 (@f_equal
+                                     type
+                                     type
+                                     eq_cons_cons_3
+                                     (Cons_type lA A1 A2)
+                                     (Cons_type lB B1 B2)
+                                     H))
+                  end
+                | right n1 =>
+                  right (fun H => n1 (@f_equal
+                                 type
+                                 type
+                                 eq_cons_cons_2
+                                 (Cons_type lA A1 A2)
+                                 (Cons_type lB B1 B2)
+                                 H))
+              end
+            | right nl =>
+              right (fun H => nl (@f_equal
+                                    type
+                                    string
+                                    eq_cons_cons_1
+                                    (Cons_type lA A1 A2)
+                                    (Cons_type lB B1 B2)
+                                    H))
+          end
+      end
+  end.
+
+Theorem type_dec_refl A : type_dec A A = left (eq_refl A).
+Proof.
+  induction A.
+   - reflexivity.
+   - simpl.
+     rewrite string_dec_refl.
+     rewrite IHA1.
+     rewrite IHA2.
+     reflexivity.
+Qed.
+
+Fixpoint Subtype A B :=
+  match A with
+    | Empty_type => True
+    | Cons_type l A1 A2 =>
+      List.In l (domain B) /\ A1 = assoc B l /\ Subtype A2 B
+  end.
+
+Infix "<:" := Subtype (at level 60).
+
+Lemma subtype_cons A B l C :
+  A <: B ->
+       ~ List.In l (domain B) ->
+       A <: Cons_type l C B.
+Proof.
+  induction A ; intros.
+  - exact I.
+  - simpl.
+    destruct H as (H1, H2).
+    case (string_dec s l) ; intro.
+    + destruct e.
+      destruct (H0 H1).
+    + intuition.
+Qed.
+
+(* Unfortunately, the theorem forall A, A <: A is false
+   when A has several occurences of the same label *)
