@@ -411,7 +411,7 @@ Fixpoint type_dec (A B : type) : {A = B} + {A <> B} :=
   match A with
     | Empty_type =>
       match B with
-        | Empty_type => left (eq_refl Empty_type)
+        | Empty_type => left eq_refl
         | Cons_type lB B1 B2 => right (diff_empty_cons lB B1 B2)
       end
     | Cons_type lA A1 A2 =>
@@ -426,32 +426,19 @@ Fixpoint type_dec (A B : type) : {A = B} + {A <> B} :=
                     | left e2 =>
                       left (eq_cons_cons lA A1 A2 lB B1 B2 el e1 e2)
                     | right n2 =>
-                      right (fun H =>
-                               n2 (@f_equal
-                                     type
-                                     type
-                                     eq_cons_cons_3
-                                     (Cons_type lA A1 A2)
-                                     (Cons_type lB B1 B2)
-                                     H))
+                      right
+                        (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
+                           n2 (f_equal eq_cons_cons_3 H))
                   end
                 | right n1 =>
-                  right (fun H => n1 (@f_equal
-                                 type
-                                 type
-                                 eq_cons_cons_2
-                                 (Cons_type lA A1 A2)
-                                 (Cons_type lB B1 B2)
-                                 H))
+                  right
+                    (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
+                       n1 (f_equal eq_cons_cons_2 H))
               end
             | right nl =>
-              right (fun H => nl (@f_equal
-                                    type
-                                    string
-                                    eq_cons_cons_1
-                                    (Cons_type lA A1 A2)
-                                    (Cons_type lB B1 B2)
-                                    H))
+              right
+                (fun H : Cons_type lA A1 A2 = Cons_type lB B1 B2 =>
+                   nl (f_equal eq_cons_cons_1 H))
           end
       end
   end.
