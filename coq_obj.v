@@ -696,3 +696,52 @@ Section subtyping.
     - apply ocast ; assumption.
   Defined.
 End subtyping.
+
+
+Definition add_loop A d l : l ∈ domain A ->
+                            Preobject A (assoc A) d -> Preobject A (assoc A) (cons l d).
+Proof.
+  intros Hd a.
+  apply pocons.
+  - apply Make_meth.
+    intro self.
+    apply select ; assumption.
+  - assumption.
+Defined.
+
+Definition preupdate_inversion A f d l : l ∈ domain A ->
+                                         f = assoc A ->
+                                         forall a,
+                                         l ∈ d ->
+                                         exists m b,
+                                           a = preupdate l A f d b m.
+Proof.
+  intros HdA Hf a.
+  induction a as [ | A f d l1 m a ].
+  - simpl.
+    discriminate.
+  - simpl.
+    case (string_dec l l1).
+    + intros e _.
+      destruct e.
+      symmetry in Hf.
+      destruct Hf.
+      exists m.
+      exists (add_loop A d l HdA a).
+      unfold add_loop.
+      rewrite preup_cons_eq.
+      reflexivity.
+    + intros ldiff Hd.
+      destruct (IHa HdA Hf Hd) as (m1, (b1, H1)).
+      exists m1.
+      exists (pocons A f d l1 m b1).
+      rewrite preup_cons_diff.
+      * rewrite H1.
+        reflexivity.
+      * assumption.
+Defined.
+
+Definition update_inversion A a l : l ∈ domain A ->
+                                    exists m b, a = update A l b m :=
+  fun Hd =>
+    preupdate_inversion A (assoc A) (domain A) l Hd (eq_refl) a Hd.
