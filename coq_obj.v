@@ -19,6 +19,9 @@ Section string_dec.
     reflexivity.
   Qed.
 
+  (* To prove the corresponding lemma on strings,
+     we first write a lemma wich unfolds the boring definitions *)
+
   Lemma string_dec_cons_eq1 a l :
     string_dec (String a l) (String a l) =
     match Ascii.ascii_dec a a with
@@ -56,6 +59,7 @@ Section string_dec.
     reflexivity.
   Qed.
 
+  (* We can simplify this expression using the theorem on chars. *)
   Lemma string_dec_cons_eq2 a l :
     string_dec (String a l) (String a l) =
     match string_dec l l with
