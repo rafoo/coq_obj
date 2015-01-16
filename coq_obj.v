@@ -148,16 +148,12 @@ Section objects.
                Preobject A f d ->
                Preobject A f (cons l d).
 
-  Fixpoint assoc (A : type) : string -> type :=
-    fun l =>
-      match A with
-        | Empty_type => Empty_type
-        | Cons_type l2 B C =>
-          match string_dec l l2 with
-            | left _ => B
-            | right _ => assoc C l
-          end
-      end.
+  Fixpoint assoc (A : type) (l : string) : type :=
+    match A with
+      | Empty_type => Empty_type
+      | Cons_type l2 B C =>
+        if string_dec l l2 then B else assoc C l
+    end.
 
   Fixpoint domain A :=
     match A with
@@ -326,11 +322,11 @@ Notation "a # l" := (select l%string _ a%obj eq_refl) (at level 50) : object_sco
 Notation "o ## l ⇐ 'ς' ( x !: A ) m" := (update A l%string o (Make_meth A (assoc A l) (fun x => m))) (at level 50).
 
 Section init.
-  Definition preinit A d :
+  Fixpoint preinit A d :
     (forall l, l ∈ d -> l ∈ domain A) ->
     Preobject A (assoc A) d.
   Proof.
-    induction d as [ | l d ].
+    destruct d as [ | l d ].
     - intro.
       apply poempty.
     - intro H.
@@ -341,7 +337,7 @@ Section init.
         * exact a.
         * apply H.
           apply in_cons_hd.
-      + apply IHd.
+      + apply preinit.
         intros l1 H1.
         apply H.
         apply in_cons_tl.
